@@ -47,34 +47,49 @@ function NRF51Node(peripheral) {
 	this._bindings.onDataReceived = this.onDataReceived.bind(this);
 }
 
+/*********************************
+ * static variables
+ *********************************/
+NRF51Node._bindings = {};
+
+/*********************************
+ * inheritance
+ *********************************/
 util.inherits(NRF51Node, events.EventEmitter);
 
-NRF51Node.discover = function (callback, uuids) {
-     //RP - JS rules!!! 
-    // needs if : static variable. At next discover call, NRF51Node.discover.onDiscover !== NRF51Node.discover.onDiscover (registered as 'discover' listener)
-    if(!NRF51Node.discover.onDiscover){
-        NRF51Node.discover.onDiscover = function (peripheral) {
-            if (peripheral.advertisement.localName === 'nrf51_node' && (uuids === undefined || uuids.indexOf(peripheral.uuid) !== -1)) {
-                noble.removeListener('discover', NRF51Node.discover.onDiscover);
-                noble.stopScanning();
-                var nrf51Node = new NRF51Node(peripheral);
-                callback(null, nrf51Node);
-            }
-        };
+/*********************************
+ * methods
+ *********************************/
+NRF51Node.onDiscover = function (callback, uuids, peripheral) {
+    debug("discovered peripheral with name " + peripheral.advertisement.localName + 'and uuid =' + peripheral.uuid);
+    if (peripheral.advertisement.localName === 'nrf51_node' && (uuids === undefined || uuids.indexOf(peripheral.uuid) !== -1)) {
+        debug("nrf51 peripheral discovered');
+        noble.removeListener('discover', NRF51Node._bindings.onDiscover);
+        noble.stopScanning();
+        var nrf51Node = new NRF51Node(peripheral);
+        callback(null, nrf51Node);
     }
+    else{
+        debug("peripheral discovered not an nrf51');
+    }
+};
 
+NRF51Node.discover = function (callback, uuids) {
 	var startScanningOnPowerOn = function () {
         if (noble.state === 'poweredOn') {
             if(noble.listeners('discover') 
                 && noble.listeners('discover').length > 0
-                && noble.listeners('discover').indexOf(NRF51Node.discover.onDiscover) != -1)
+                && noble.listeners('discover').indexOf(NRF51Node._bindings.onDiscover) != -1)
             {
                 //be sure to not register listener multiple times (in case of 'discover' listener not called)
                 // listener already registered - no need to reregister it
+                noble.removeListener('discover', NRF51Node._bindings.onDiscover);
             }
             else{
-                noble.on('discover', NRF51Node.discover.onDiscover);
+                //nothing to do
             }
+            NRF51Node._bindings.onDiscover = NRF51Node.onDiscover.bind(undefined, callback, uuids);
+            noble.on('discover', NRF51Node._bindings.onDiscover);
 			noble.startScanning();
 		} else if (noble.state === 'unknown') {
             //Wait for adapter to be ready
